@@ -1,7 +1,7 @@
 # Trabalho final
 
-* Nome do Aluno: ________
-* Número de Matrícula: ________
+* Nome do Aluno: ***Gustavo Casaes Alves***
+* Número de Matrícula: ***2018111130***
 * Disciplina: Aprendizado de Máquina
 * Semestre: 2023/1
 * Data da entrega: 28/06/2023
