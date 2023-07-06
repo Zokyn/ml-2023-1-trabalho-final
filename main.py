@@ -2,13 +2,12 @@ import pandas as pd
 import re
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
-from sklearn.naive_bayes import GaussianNB
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.calibration import LabelEncoder
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
 import matplotlib.pyplot as plt
+from tensorflow import keras 
 from methods import normalization, average_of_rating
 
 STOPWORDS = stopwords.words('english')
@@ -17,6 +16,7 @@ STOPWORDS = stopwords.words('english')
 dataset = pd.read_csv("New_Delhi_reviews.csv")
 data = dataset.copy()
 
+### PRE PROCESSAMENTO
 ## 2.REMOVENDO VALORES VAZIOS
 data.dropna(inplace=True)
 data.reset_index(drop=True, inplace=True)
@@ -50,8 +50,11 @@ for i in range(len(data)):
     
     ## TOKENIZATION
     # remove-se caracteres desncessarios
-    review = re.sub(r"[^a-zA-Z0-9\s]", "", review)
     review = re.sub(r"https?://\S+", "", review)
+    review = re.sub(r"[^a-zA-Z0-9\s]", "", review)
+    # RETIRAR NUMEROS: possivelmente desnecessarios
+    # testar com e sem numeros em modelos diferentes
+
     # divide o documento em palavras uma lista minusculas
     review = review.lower().split()
 
@@ -85,53 +88,54 @@ data["stem_review"] = corpus["review_full"]
 # de treino e teste dos dados e
 # utilizar um vectorizer para a 
 # frequencia de palavras no review
-vectorizer = CountVectorizer(max_features=1500)
 
+max_features = 1500
+rating_classes = {1: 'negative', 2: 'negative', 
+    3: 'neutral', 4: 'positive', 
+    5: 'positive'}
+
+
+vectorizer = CountVectorizer(max_features=max_features) # max_feature : HYPERPARAMETER
+enconder = LabelEncoder()
+# testar outros max features para novas acurácias
+
+# x = vectorizer.fit_transform(data["stem_review"].values)
+# y = enconder.fit_transform(data["rating_review"].replace(rating_classes))
 x = vectorizer.fit_transform(data["stem_review"].values)
-y = data["rating_review"].replace({1: 'negative', 2: 'negative', 3: 'neutral', 4: 'positive', 5: 'positive'}).values
+# y = data["rating_review"].replace(rating_classes)
+y = data["rating_review"].replace(rating_classes)
+y = enconder.fit_transform(y)
+y = keras.utils.to_categorical(y)
+# y = data['rating_norm']
+
 
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.7, random_state=1)
 
 x_train = x_train.toarray()
 x_test = x_test.toarray()
+### APRENDIZADO 
 
-## 5.CONSTRUINDO UM CLASSIFICADOR
-# usando Naive Bayes
-method = GaussianNB()
-method.fit(x_train, y_train)
-y_pred = method.predict(x_test)
+### 5. CONSTRUINDO O MODELO
+# CNN or LSTM (C-LSTM)
+# Camada de Entrada: 1500   (features)
+# Camada de Saida: 3        (classes)
 
-# usando RandomForest
-method = RandomForestClassifier()
-method.fit(x_train, y_train)
-y_pred2 = method.predict(x_test) 
+print(x_train.shape, x_test.shape, y_train.shape, y_test.shape)
+model = keras.Sequential([
+    keras.Input(shape=(max_features, 1)),
+    keras.layers.Conv1D(32, 3, activation='relu', ), 
+    keras.layers.MaxPooling1D(2),
+    keras.layers.Flatten(),
+    keras.layers.Dense(64, activation='relu'),
+    keras.layers.Dense(3, activation='softmax')
+])
 
-# Usando Regressão
-method = LogisticRegression(max_iter=1000)
-method.fit(x_train, y_train)
-y_pred3 = method.predict(x_test)
+# ### 6. COMPILANDO O MODELO
+model.compile(optimizer='adam', 
+              loss='categorical_crossentropy', 
+              metrics=['accuracy'])
 
-## 6.ACESSANDO OS RESULTADOS
-accuracy = metrics.accuracy_score(y_test, y_pred)
-accuracy2 = metrics.accuracy_score(y_test, y_pred2)
-accuracy3 = metrics.accuracy_score(y_test, y_pred3)
-fscore = metrics.f1_score(y_test, y_pred)
-fscore2 = metrics.f1_score(y_test, y_pred2)
-fscore3 = metrics.f1_score(y_test, y_pred3)
-recall = metrics.f1_score(y_test, y_pred)
-recall2 = metrics.f1_score(y_test, y_pred2)
-recall3 = metrics.f1_score(y_test, y_pred3)
+model.fit(x_train, y_train, epochs=5, batch_size=32, validation_data=(x_test, y_test))
 
-
-print(f"[NAIVE BAYES] Accuracy: {accuracy}")
-# print(f"[NAIVE BAYES] {fscore}")
-# print(f"[NAIVE BAYES] {recall}")
-print(f"[RANDOM FOREST] Accuracy: {accuracy2}")
-# print(f"[RANDOM FOREST] {fscore2}")
-# print(f"[RANDOM FOREST] {recall}")
-print(f"[REGRESSÃO] Accuracy: {accuracy3}")
-# print(f"[REGRESSÃO] {fscore3}")
-# print(f"[REGRESSÃO] {recall}")
-# print(data)
-# print_dataset(data)
-# print_cloudword(data)
+loss, acc = model.evaluate(x_test, y_test)
+print('Acurácia:', acc)
